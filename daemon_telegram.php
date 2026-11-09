@@ -347,9 +347,10 @@ class FarControlDaemon
         }
 
         $text = isset($message['text']) ? trim($message['text']) : '';
+        $messageId = (int)($message['message_id'] ?? 0);
 
         if (str_starts_with($text, '/unlock')) {
-            $this->handleUnlockCommand($text);
+            $this->handleUnlockCommand($text, $messageId);
             return;
         }
 
@@ -393,8 +394,13 @@ class FarControlDaemon
         }
     }
 
-    private function handleUnlockCommand(string $text): void
+    private function handleUnlockCommand(string $text, int $messageId = 0): void
     {
+        // Deleta imediatamente a mensagem do usuário contendo o PIN para não ficar no histórico do chat
+        if ($messageId > 0) {
+            $this->deleteTelegramMessage($this->allowedChatId, $messageId);
+        }
+
         if ($this->sessionPin === null) {
             $this->sendTelegramMessage($this->allowedChatId, "ℹ️ A autenticação por PIN está desativada no seu `.env`.");
             return;
@@ -421,10 +427,13 @@ class FarControlDaemon
     {
         if ($text === '/start' || $text === '/help') {
             $orchTxt = $this->orchestratorEnabled ? "🟢 Ativo (`{$this->orchestratorModel}`)" : "⚪ Desativado";
-            $msg = "🤖 *Far-Control: Comandos do Sistema*\n\n"
+            $msg = "🤖 *Sonar: Comandos do Sistema*\n\n"
                 . "• *Comandos Linux Nativos (Zero Tokens):*\n"
                 . "  Envie no chat: `ls -la`, `git status`, `git pull`, `mkdir pasta`, `cat .env.example`, `npm test`.\n"
                 . "  Ou com prefixo: `/sh <comando>` ou `$ <comando>`.\n\n"
+                . "• *Git Mobile (Commit & Push do Celular):*\n"
+                . "  `/commit <mensagem>` - Faz `git add -A` e commit com aspas normalizadas.\n"
+                . "  `/push [mensagem]` - Envia ao GitHub (commita se mensagem fornecida).\n\n"
                 . "• *Orquestrador de Dificuldade:*\n"
                 . "  Status atual: {$orchTxt}\n"
                 . "  `/orchestrator on` - Ativa triagem inteligente.\n"
@@ -551,6 +560,26 @@ class FarControlDaemon
 
         if ($text === '/pwd') {
             $this->sendTelegramMessage($this->allowedChatId, "📂 *Workspace Atual:*\n`{$this->currentWorkingDir}`");
+            return;
+        }
+
+        // Atalhos de Git Mobile-Friendly (Commit & Push Direto do Celular)
+        if (str_starts_with($text, '/commit')) {
+            $commitMsg = trim(substr($text, 7));
+            if ($commitMsg === '') {
+                $this->sendTelegramMessage(
+                    $this->allowedChatId,
+                    "⚠️ Uso correto: `/commit <sua mensagem de commit>`\nExemplo: `/commit feat: novas rotas da api`"
+                );
+                return;
+            }
+            $this->executeGitCommitAndPush($commitMsg, false);
+            return;
+        }
+
+        if (str_starts_with($text, '/push')) {
+            $pushMsg = trim(substr($text, 5));
+            $this->executeGitCommitAndPush($pushMsg, true);
             return;
         }
 
@@ -1150,6 +1179,10 @@ class FarControlDaemon
 
     private function executeShellCommand(string $cmd): void
     {
+        // Normaliza aspas curvas tipográficas comuns em teclados mobile (iOS/Android)
+        $cmd = str_replace(["\xe2\x80\x9c", "\xe2\x80\x9d", '“', '”'], '"', $cmd);
+        $cmd = str_replace(["\xe2\x80\x98", "\xe2\x80\x99", '‘', '’'], "'", $cmd);
+
         $this->log("Executando Shell nativo: {$cmd}", "INFO");
 
         $descriptors = [
@@ -1218,6 +1251,36 @@ class FarControlDaemon
             $this->sendTelegramMessage($this->allowedChatId, $formatted);
         } else {
             $this->sendChunkedTelegramMessage($this->allowedChatId, $cleanOutput);
+        }
+    }
+
+    private function executeGitCommitAndPush(string $msg, bool $andPush): void
+    {
+        if (!is_dir($this->currentWorkingDir . '/.git')) {
+            $this->sendTelegramMessage($this->allowedChatId, "❌ O diretório atual não é um repositório Git (`{$this->currentWorkingDir}`).");
+            return;
+        }
+
+        // Normaliza aspas curvas comuns em smartphones (iOS/Android)
+        $cleanMsg = str_replace(["\xe2\x80\x9c", "\xe2\x80\x9d", '“', '”', "\xe2\x80\x98", "\xe2\x80\x99", '‘', '’'], "'", trim($msg));
+        $cleanMsg = trim($cleanMsg, "'\" \t\n\r");
+
+        $gitDirArg = "-C " . escapeshellarg($this->currentWorkingDir);
+
+        if ($cleanMsg !== '') {
+            $this->sendTelegramMessage($this->allowedChatId, "📦 Executando `git add -A` e commit...");
+            shell_exec("git {$gitDirArg} add -A 2>&1");
+            $commitCmd = "git {$gitDirArg} commit -m " . escapeshellarg($cleanMsg) . " 2>&1";
+            $commitOut = trim((string)shell_exec($commitCmd));
+            $this->sendTelegramMessage($this->allowedChatId, "📦 *Git Commit:* `{$cleanMsg}`\n```text\n{$commitOut}\n```");
+        }
+
+        if ($andPush) {
+            $this->sendTelegramMessage($this->allowedChatId, "🚀 Executando `git push`...");
+            $pushCmd = "git {$gitDirArg} push 2>&1";
+            $pushOut = trim((string)shell_exec($pushCmd));
+            $response = "🚀 *Git Push Result:*\n```text\n{$pushOut}\n```";
+            $this->sendTelegramMessage($this->allowedChatId, $response);
         }
     }
 
@@ -1334,12 +1397,16 @@ class FarControlDaemon
             . "• *Cascata:* 1º Groq Turbo ➔ 2º Groq v3 ➔ 3º OpenRouter Whisper.\n\n"
             . "5️⃣ *SEGURANÇA DEFENSIVA (Hardening)*\n"
             . "• *2FA PIN:* Sessão tranca por inatividade. `/unlock <PIN>` e `/lock`.\n"
+            . "• *PIN Auto-Delete:* O bot apaga imediatamente a mensagem contendo o seu PIN do chat.\n"
             . "• *Chroot Jail:* Navegação com `/cd` bloqueada fora da pasta base de projetos.\n"
             . "• *DLP:* Mascaramento automático de chaves em logs e respostas.\n"
             . "• *Zero Segredos:* Credenciais isoladas no `.env` com permissão Unix `0600`.\n\n"
             . "6️⃣ *DIRETRIZES DO AI.MD & SANITIZAÇÃO*\n"
             . "• Princípios: KISS, YAGNI, Clean Code e SOLID.\n"
-            . "• Algoritmo de limpeza que remove `<thought>`, ruídos de tasks e preâmbulos.";
+            . "• Algoritmo de limpeza que remove `<thought>`, ruídos de tasks e preâmbulos.\n\n"
+            . "7️⃣ *GIT MOBILE (Commit & Push Direto do Celular)*\n"
+            . "• `/commit <msg>` - Executa `git add -A` e cria o commit com normalização de aspas de smartphones.\n"
+            . "• `/push [msg]` - Cria commit (se mensagem informada) e executa `git push` direto para o GitHub sem precisar abrir terminal.";
 
         $this->sendTelegramMessage($this->allowedChatId, $info);
     }
@@ -1556,6 +1623,28 @@ class FarControlDaemon
             $chunkIndex++;
             usleep(250000);
         }
+    }
+
+    public function deleteTelegramMessage(int $chatId, int $messageId): bool
+    {
+        $url = "https://api.telegram.org/bot{$this->botToken}/deleteMessage";
+        $payload = [
+            'chat_id'    => $chatId,
+            'message_id' => $messageId,
+        ];
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query($payload),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+
+        $response = curl_exec($ch);
+        curl_close($ch);
+        return true;
     }
 
     // ========================================================================

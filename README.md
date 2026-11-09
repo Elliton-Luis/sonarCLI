@@ -84,8 +84,10 @@ Quando uma instrução em linguagem natural chega:
 
 | Comando | Descrição |
 | :--- | :--- |
-| `/unlock <PIN>` | Desbloqueia a sessão do bot |
+| `/unlock <PIN>` | Desbloqueia a sessão do bot (mensagem com PIN é auto-deletada) |
 | `/lock` | Tranca a sessão imediatamente |
+| `/commit <msg>` | `git add -A` + commit direto do celular (aspas normalizadas) |
+| `/push [msg]` | Envia ao GitHub (`git push`) ou commita e envia se mensagem fornecida |
 | `/info` | Exibe o guia completo da arquitetura, fluxos e segurança |
 | `/orchestrator on\|off` | Ativa ou desativa a triagem inteligente de dificuldade |
 | `/agent [nome]` | Alterna entre `agy` e `opencode` |
