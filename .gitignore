@@ -1,0 +1,20 @@
+# Ambiente e credenciais
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+daemon.log
+
+# Armazenamento temporário de áudios
+storage/
+tmp/
+
+# Arquivos do sistema e IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
