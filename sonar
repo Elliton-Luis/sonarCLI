@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# ============================================================================
+# SONAR: CLI de Gerenciamento & Controle
+# ============================================================================
+set -e
+
+SONAR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SONAR_DIR"
+
+DAEMON_FILE="$SONAR_DIR/daemon_telegram.php"
+LOG_FILE="$SONAR_DIR/daemon.log"
+SERVICE_NAME="sonar-daemon.service"
+
+is_service_active() {
+    systemctl --user is-active --quiet "$SERVICE_NAME" 2>/dev/null
+}
+
+get_process_pid() {
+    pgrep -u "$UID" -f "$DAEMON_FILE" | head -n 1 || true
+}
+
+case "${1:-help}" in
+    start)
+        echo "Iniciando Sonar..."
+        if is_service_active; then
+            echo "Sonar já está rodando via systemd ($SERVICE_NAME)."
+            exit 0
+        fi
+
+        PID=$(get_process_pid)
+        if [ -n "$PID" ]; then
+            echo "Sonar já está rodando com PID $PID."
+            exit 0
+        fi
+
+        # Se houver serviço instalado no systemd, usa ele
+        if [ -f "$HOME/.config/systemd/user/$SERVICE_NAME" ]; then
+            systemctl --user start "$SERVICE_NAME"
+            echo "Sonar iniciado via systemd."
+        else
+            nohup php "$DAEMON_FILE" >> "$LOG_FILE" 2>&1 &
+            sleep 1
+            NEW_PID=$(get_process_pid)
+            echo "Sonar iniciado em segundo plano com PID $NEW_PID."
+        fi
+        ;;
+
+    run|fg)
+        echo "Iniciando Sonar em primeiro plano (Ctrl+C para sair)..."
+        if is_service_active; then
+            echo "Aviso: Parando serviço systemd para evitar conflito de conexão..."
+            systemctl --user stop "$SERVICE_NAME" 2>/dev/null || true
+        fi
+        PID=$(get_process_pid)
+        if [ -n "$PID" ]; then
+            echo "Finalizando processo anterior (PID $PID)..."
+            kill "$PID" 2>/dev/null || true
+            sleep 1
+        fi
+        exec php "$DAEMON_FILE"
+        ;;
+
+    stop)
+        echo "Parando Sonar..."
+        STOPPED=false
+        if is_service_active; then
+            systemctl --user stop "$SERVICE_NAME"
+            STOPPED=true
+        fi
+
+        PID=$(get_process_pid)
+        if [ -n "$PID" ]; then
+            kill "$PID" 2>/dev/null || true
+            WAIT_COUNT=0
+            while kill -0 "$PID" 2>/dev/null && [ "$WAIT_COUNT" -lt 10 ]; do
+                sleep 0.5
+                WAIT_COUNT=$((WAIT_COUNT + 1))
+            done
+            if kill -0 "$PID" 2>/dev/null; then
+                kill -9 "$PID" 2>/dev/null || true
+            fi
+            STOPPED=true
+        fi
+
+        if [ "$STOPPED" = true ]; then
+            echo "Sonar encerrado com sucesso."
+        else
+            echo "Sonar não estava em execução."
+        fi
+        ;;
+
+    restart)
+        "$0" stop
+        sleep 1
+        "$0" start
+        ;;
+
+    status)
+        echo "=== Status do Sonar ==="
+        if is_service_active; then
+            echo "Modo: Serviço Systemd (Ativo)"
+            systemctl --user status "$SERVICE_NAME" --no-pager -l | head -n 12
+        else
+            PID=$(get_process_pid)
+            if [ -n "$PID" ]; then
+                echo "Modo: Processo em Segundo Plano"
+                echo "PID: $PID"
+                ps -p "$PID" -o pid,user,%cpu,%mem,etime,cmd
+            else
+                echo "Status: Parado"
+            fi
+        fi
+        ;;
+
+    logs)
+        LINES="${2:-30}"
+        if [ "$2" = "-f" ] || [ "${2:-}" = "--follow" ]; then
+            tail -f "$LOG_FILE"
+        else
+            echo "=== Últimos $LINES logs de $LOG_FILE ==="
+            tail -n "$LINES" "$LOG_FILE"
+        fi
+        ;;
+
+    test)
+        echo "Verificando sintaxe e arquivos..."
+        php -l "$DAEMON_FILE"
+        if [ -f "$SONAR_DIR/.env" ]; then
+            echo "Arquivo .env presente."
+        else
+            echo "Aviso: .env ausente! Rode ./setup.sh para inicializar."
+        fi
+        ;;
+
+    help|*)
+        echo "Sonar CLI Runner"
+        echo ""
+        echo "Uso: ./sonar [comando]"
+        echo ""
+        echo "Comandos disponíveis:"
+        echo "  start     Inicia o Sonar em segundo plano"
+        echo "  run       Roda o Sonar no terminal interativo (logs ao vivo)"
+        echo "  stop      Para a execução do Sonar"
+        echo "  restart   Reinicia o Sonar"
+        echo "  status    Exibe status do processo e consumo de memória"
+        echo "  logs [-f] Mostra os últimos logs (ou acompanhe com -f)"
+        echo "  test      Valida integridade do código PHP e ambiente"
+        echo ""
+        ;;
+esac

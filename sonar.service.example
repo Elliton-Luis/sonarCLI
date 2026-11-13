@@ -1,0 +1,15 @@
+[Unit]
+Description=Sonar: AI Terminal Bridge & Multi-Agent Orchestrator
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/sonar
+ExecStart=/usr/bin/php %h/sonar/daemon_telegram.php
+Restart=always
+RestartSec=5
+StandardOutput=append:%h/sonar/daemon.log
+StandardError=append:%h/sonar/daemon.log
+
+[Install]
+WantedBy=default.target

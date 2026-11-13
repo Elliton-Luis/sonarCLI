@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  sonar:
+    build: .
+    container_name: sonar_bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Monta o diretório de projetos local no container
+      - ${PROJECTS_BASE_DIR:-./storage}:/app/projects
+      - ./storage:/app/storage

@@ -1,49 +1,55 @@
 # 🧠 AI & Engineering Guidelines (Sonar Protocol)
 
-> **Diretrizes estritas de desenvolvimento, engenharia de software e comunicação para agentes de IA que operam neste repositório.**
+> **Diretrizes de engenharia e roteamento condicional para agentes no Sonar.**
 
 ---
 
-## 🎯 1. Princípios de Engenharia de Software
+## 🏛️ 1. Hierarquia de Decisão (Progressive Disclosure)
 
-### 1.1 KISS (Keep It Simple, Stupid)
-* Escreva o código mais simples e legível possível para resolver o problema.
-* Evite arquiteturas desnecessariamente complexas, micro-otimizações prematuras ou padrões de projeto forçados.
+O agente deve carregar habilidades e protocolos apenas sob demanda estrita:
 
-### 1.2 YAGNI (You Aren't Gonna Need It)
-* Implemente **apenas** o que foi explicitamente solicitado.
-* Não adicione métodos utilitários "para o caso de precisarmos no futuro", parâmetros opcionais não utilizados ou abstrações hipotéticas.
-
-### 1.3 Clean Code
-* **Nomenclatura Clara:** Variáveis, funções e classes devem revelar sua intenção sem necessidade de comentários óbvios.
-* **Funções Pequenas e Focadas:** Cada função deve fazer uma única coisa e fazê-la bem.
-* **Tipagem Estrita:** Sempre utilize tipagem forte (ex: `declare(strict_types=1);` no PHP, TypeScript estrito, etc.).
-* **Tratamento de Erros:** Não silencie exceções com blocos vazios; trate erros de forma explícita e elegante.
-
-### 1.4 SOLID
-* **S (Single Responsibility):** Uma classe deve ter um e apenas um motivo para mudar.
-* **O (Open/Closed):** Aberto para extensão, fechado para modificação.
-* **L (Liskov Substitution):** Subtipos devem ser substituíveis pelos seus tipos base.
-* **I (Interface Segregation):** Interfaces granulares e específicas; não force implementação de métodos desnecessários.
-* **D (Dependency Inversion):** Dependa de abstrações e interfaces, não de implementações concretas.
+1. **Tarefas de Leitura / Análise / Perguntas:**
+   - Responda diretamente no estilo `caveman`.
+   - **PROIBIDO** acionar subagentes de code review ou mutações.
+2. **Tarefas de Busca e Exploração:**
+   - Dispare a skill `caveman-explore`.
+   - Utilize comandos Linux cirúrgicos (`grep`, `find`, `sed`, `awk`).
+   - Jamais leia arquivos inteiros sem necessidade.
+3. **Tarefas de Implementação / Refatoração de Código:**
+   - **1º Lugar: Legibilidade** (KISS, Clean Code, funções enxutas, nomenclatura autoexplicativa).
+   - **2º Lugar: Performance e Qualidade** (SOLID, tipagem forte, tratamento explícito de exceções).
+   - **Acionamento do Subagente:** Ao concluir o código, dispare a skill `code-review-loop` em sessão separada.
+   - **Loop de Correção:** Máximo de 2 tentativas de correção entre pai e revisor. Se persistir falha, notifique o usuário para decisão.
 
 ---
 
-## ⚡ 2. Regras de Comunicação e Formatação de Resposta (Output Policy)
+## 📢 2. Fluxo Operacional & Comunicação
 
-> **Atenção:** Como o usuário consome as respostas diretamente na tela do celular pelo Telegram, o ruído visual deve ser **ZERO**.
+1. **Status em Linha Única:**
+   - `Analisando a task`
+   - `Planejando`
+   - `Começando a fazer X`
+   - `Finalizando Y`
+   - `Terminei`
+2. **Aprovação Prévia de Minitasks:**
+   - Apresente as minitasks antes da execução.
+   - Aguarde o "sim" / aprovação do usuário.
+3. **Concisão Caveman:**
+   - Sem preâmbulos, saudações ou floreios.
+   - Payload de código e comandos 100% literais.
 
-1. **Zero Preâmbulos:**
-   * ❌ NUNCA diga: *"Com certeza!"*, *"Certamente!"*, *"Claro, vou fazer isso para você agora mesmo!"*, *"Aqui está o código solicitado:"*.
-   * ✅ Vá **direto** ao resultado ou ao bloco de código.
+---
 
-2. **Ultra Conciso:**
-   * Se a resposta for código, entregue o código ou o diff limpo.
-   * Se precisar explicar algo, faça-o em **no máximo 2 ou 3 frases curtas e objetivas**.
+## 📱 3. Output Limpo & Formatação para Telegram (Zero Poluição)
 
-3. **Sem Metadados Internos:**
-   * Não emita tags de pensamento (`<thought>`, `<thinking>`).
-   * Não repita logs de ferramentas ou saídas de terminal que não foram pedidas.
+Como as respostas são lidas no celular via Telegram, siga rigorosamente:
 
-4. **KISS & Refatorações Cirúrgicas:**
-   * Ao editar arquivos, modifique apenas as linhas necessárias. Não reescreva arquivos inteiros sem necessidade.
+1. **Sem Links Markdown:**
+   - NUNCA use sintaxe de link markdown `[texto](file://...)`. O Telegram mobile não abre links locais e poluí a tela.
+   - Cite o nome do arquivo diretamente como texto simples.
+2. **Caminhos Curtos (Máximo 2 Pastas):**
+   - NUNCA exiba caminhos absolutos longos como `/home/usuario/projetos/repo/sub/src/arquivo.js`.
+   - Mostre no máximo 2 pastas antes do arquivo: `src/arquivo.js` ou `sub/src/arquivo.js`.
+3. **Hierarquia Limpa com 2 Enters (\n\n):**
+   - Separe tópicos, listas e seções com duas quebras de linha (`\n\n`) para leitura agradável.
+   - Evite poluição de asteriscos (`**`) ou crases repetitivas no chat.

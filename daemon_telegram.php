@@ -2,7 +2,7 @@
 
 /**
  * ============================================================================
- * FAR-CONTROL: Secure Multi-Agent & Orchestrated CLI Telegram Bridge
+ * SONAR: Secure Multi-Agent & Orchestrated CLI Telegram Bridge
  * ============================================================================
  * Ponte de comunicação bidirecional de nível empresarial para controle remoto
  * de múltiplos agentes de IA (Antigravity CLI, OpenCode) via Telegram.
@@ -65,9 +65,7 @@ class AgyDriver implements AgentDriverInterface
 
     public function buildCommand(string $prompt, bool $continue, ?string $model): string
     {
-        // Anexa diretriz estrita do AI.md para garantir concisão, KISS e Clean Code
-        $directive = " [DIRETRIZ: Siga estritamente o AI.md. Seja ultra conciso, KISS, YAGNI, Clean Code e SOLID. Vá direto ao ponto, sem preâmbulos.]";
-        $escapedPrompt = escapeshellarg($prompt . $directive);
+        $escapedPrompt = escapeshellarg($prompt);
         $continueFlag = $continue ? '-c ' : '';
         $modelFlag = (!empty($model) && $model !== 'default') ? '--model ' . escapeshellarg($model) . ' ' : '';
 
@@ -111,9 +109,7 @@ class OpenCodeDriver implements AgentDriverInterface
 
     public function buildCommand(string $prompt, bool $continue, ?string $model): string
     {
-        // Anexa diretriz estrita do AI.md
-        $directive = " [DIRETRIZ: Siga o AI.md. Seja conciso, KISS, Clean Code, SOLID. Entregue direto a solução.]";
-        $escapedPrompt = escapeshellarg($prompt . $directive);
+        $escapedPrompt = escapeshellarg($prompt);
         $continueFlag = $continue ? '-c ' : '';
         $modelFlag = (!empty($model) && $model !== 'default') ? '-m ' . escapeshellarg($model) . ' ' : '';
 
@@ -143,7 +139,7 @@ class NvidiaDriver implements AgentDriverInterface
 
     public function buildCommand(string $prompt, bool $continue, ?string $model): string
     {
-        // Executado diretamente via API no FarControlDaemon
+        // Executado diretamente via API no SonarDaemon
         return "NVIDIA_DIRECT_CALL";
     }
 
@@ -161,7 +157,7 @@ class NvidiaDriver implements AgentDriverInterface
 // DAEMON PRINCIPAL DE CONTROLE REMOTO & ORQUESTRAÇÃO
 // ============================================================================
 
-class FarControlDaemon
+class SonarDaemon
 {
     private string $botToken;
     private int $allowedChatId;
@@ -245,7 +241,7 @@ class FarControlDaemon
     public function run(): void
     {
         $this->log("=======================================================", "INFO");
-        $this->log("Iniciando Far-Control: Multi-Agent & Orchestrated Bridge", "INFO");
+        $this->log("Iniciando Sonar: Multi-Agent & Orchestrated Bridge", "INFO");
         $this->log("Agente Forte: {$this->currentAgentKey} (" . $this->getActiveDriver()->getName() . ")", "INFO");
         $this->log("Orquestrador de Dificuldade: " . ($this->orchestratorEnabled ? "ATIVO ({$this->orchestratorModel})" : "DESATIVADO"), "INFO");
         $this->log("Workspace: {$this->currentWorkingDir}", "INFO");
@@ -271,7 +267,7 @@ class FarControlDaemon
             $this->log("[ATENÇÃO] ALLOWED_CHAT_ID está 0. Envie mensagem ao bot para registrar seu ID!", "WARNING");
         } else {
             $orchStatus = $this->orchestratorEnabled ? "🟢 Ativo (`{$this->orchestratorModel}`)" : "⚪ Desativado";
-            $msg = "🛡️ *Far-Control Conectado e Operacional!*\n\n"
+            $msg = "🛡️ *Sonar Conectado e Operacional!*\n\n"
                 . "• *Orquestrador:* {$orchStatus}\n"
                 . "• *Agente de Projeto:* `{$this->currentAgentKey}`\n"
                 . "• *Workspace:* `{$this->currentWorkingDir}`\n\n"
@@ -428,8 +424,15 @@ class FarControlDaemon
         if ($text === '/start' || $text === '/help') {
             $orchTxt = $this->orchestratorEnabled ? "🟢 Ativo (`{$this->orchestratorModel}`)" : "⚪ Desativado";
             $msg = "🤖 *Sonar: Comandos do Sistema*\n\n"
-                . "• *Comandos Linux Nativos (Zero Tokens):*\n"
-                . "  Envie no chat: `ls -la`, `git status`, `git pull`, `mkdir pasta`, `cat .env.example`, `npm test`.\n"
+                . "• *Menu Completo Linux (Zero Tokens):*\n"
+                . "  👉 `/linux` - Lista TODOS os comandos Linux suportados com exemplos.\n\n"
+                . "• *Comandos de Arquivos & Pastas:*\n"
+                . "  `/cp` - Sintaxe e exemplos para copiar arquivos e pastas.\n"
+                . "  `/mv` - Sintaxe e exemplos para mover ou renomear.\n"
+                . "  `/mkdir` - Criar pastas e estruturas aninhadas.\n"
+                . "  `/rm` - Remover arquivos ou pastas com segurança.\n\n"
+                . "• *Terminal Bash Direto:*\n"
+                . "  Envie no chat: `ls -la`, `cp orig dest`, `mv orig dest`, `cat .env.example`, `git status`.\n"
                 . "  Ou com prefixo: `/sh <comando>` ou `$ <comando>`.\n\n"
                 . "• *Git Mobile (Commit & Push do Celular):*\n"
                 . "  `/commit <mensagem>` - Faz `git add -A` e commit com aspas normalizadas.\n"
@@ -614,7 +617,7 @@ class FarControlDaemon
             $curMod = $this->currentModel ?: 'Padrão do agente';
             $pinStat = $this->sessionPin ? '🟢 Autenticado (PIN Ativo)' : '⚪ Sem PIN';
             $orchStat = $this->orchestratorEnabled ? "🟢 Ativo (`{$this->orchestratorModel}`)" : "⚪ Desativado";
-            $msg = "📊 *Status do Far-Control:*\n\n"
+            $msg = "📊 *Status do Sonar:*\n\n"
                 . "• *Orquestrador:* {$orchStat}\n"
                 . "• *Agente de Projeto:* `{$this->currentAgentKey}` (" . $this->getActiveDriver()->getName() . ")\n"
                 . "• *Modelo de Projeto:* `{$curMod}`\n"
@@ -622,6 +625,102 @@ class FarControlDaemon
                 . "• *Segurança:* {$pinStat}\n"
                 . "• *Status:* 🟢 Pronto para comandos";
             $this->sendTelegramMessage($this->allowedChatId, $msg);
+            return;
+        }
+
+        // Menu dedicado com todos os comandos Linux
+        if ($text === '/linux' || $text === '/comandos' || $text === '/terminal' || $text === '/shell' || $text === '/bash') {
+            $this->sendLinuxCommandsMenu();
+            return;
+        }
+
+        // Comando explicativo ou de atalho: cp
+        if ($text === '/cp' || $text === 'cp') {
+            $this->sendTelegramMessage(
+                $this->allowedChatId,
+                "📋 *Comando: cp (Copiar Arquivos & Pastas)*\n\n"
+                . "• *Copiar um arquivo:*\n"
+                . "  `cp <origem> <destino>`\n"
+                . "  Exemplo: `cp .env.example .env`\n\n"
+                . "• *Copiar diretório completo (recursivo):*\n"
+                . "  `cp -r <pasta_origem> <pasta_destino>`\n"
+                . "  Exemplo: `cp -r src/ backup_src/`\n\n"
+                . "• *Copiar múltiplos arquivos para uma pasta:*\n"
+                . "  `cp arq1.txt arq2.txt destino/`\n\n"
+                . "• *Forçar sobrescrita:*\n"
+                . "  `cp -f <origem> <destino>`\n\n"
+                . "💡 *Uso direto:* Envie `cp <origem> <destino>` ou `/cp <origem> <destino>`."
+            );
+            return;
+        }
+        if (str_starts_with($text, '/cp ')) {
+            $this->executeShellCommand("cp " . trim(substr($text, 4)));
+            return;
+        }
+
+        // Comando explicativo ou de atalho: mv
+        if ($text === '/mv' || $text === 'mv') {
+            $this->sendTelegramMessage(
+                $this->allowedChatId,
+                "📦 *Comando: mv (Mover & Renomear)*\n\n"
+                . "• *Renomear arquivo ou diretório:*\n"
+                . "  `mv <antigo> <novo>`\n"
+                . "  Exemplo: `mv script_v1.php script.php`\n\n"
+                . "• *Mover arquivo para outra pasta:*\n"
+                . "  `mv <arquivo> <pasta_destino>/`\n"
+                . "  Exemplo: `mv style.css public/css/`\n\n"
+                . "• *Mover múltiplos arquivos:*\n"
+                . "  `mv *.log storage/logs/`\n\n"
+                . "• *Mover pasta inteira:*\n"
+                . "  `mv pasta_antiga/ pasta_nova/`\n\n"
+                . "💡 *Uso direto:* Envie `mv <origem> <destino>` ou `/mv <origem> <destino>`."
+            );
+            return;
+        }
+        if (str_starts_with($text, '/mv ')) {
+            $this->executeShellCommand("mv " . trim(substr($text, 4)));
+            return;
+        }
+
+        // Comando explicativo ou de atalho: mkdir
+        if ($text === '/mkdir' || $text === 'mkdir') {
+            $this->sendTelegramMessage(
+                $this->allowedChatId,
+                "📁 *Comando: mkdir (Criar Pastas)*\n\n"
+                . "• *Criar uma pasta simples:*\n"
+                . "  `mkdir <nome_da_pasta>`\n"
+                . "  Exemplo: `mkdir logs`\n\n"
+                . "• *Criar árvore de subpastas aninhadas:*\n"
+                . "  `mkdir -p <pasta/subpasta/final>`\n"
+                . "  Exemplo: `mkdir -p storage/framework/views`\n\n"
+                . "💡 *Uso direto:* Envie `mkdir <pasta>` ou `/mkdir <pasta>`."
+            );
+            return;
+        }
+        if (str_starts_with($text, '/mkdir ')) {
+            $this->executeShellCommand("mkdir " . trim(substr($text, 7)));
+            return;
+        }
+
+        // Comando explicativo ou de atalho: rm
+        if ($text === '/rm' || $text === 'rm') {
+            $this->sendTelegramMessage(
+                $this->allowedChatId,
+                "🗑️ *Comando: rm (Remover Arquivos & Pastas)*\n\n"
+                . "• *Remover um arquivo:*\n"
+                . "  `rm <arquivo>`\n"
+                . "  Exemplo: `rm temp.txt`\n\n"
+                . "• *Remover pasta e todo o seu conteúdo:*\n"
+                . "  `rm -rf <pasta>`\n"
+                . "  Exemplo: `rm -rf dist`\n\n"
+                . "• *Remover múltiplos arquivos por padrão:*\n"
+                . "  `rm -f *.tmp`\n\n"
+                . "💡 *Uso direto:* Envie `rm <alvo>` ou `/rm <alvo>`."
+            );
+            return;
+        }
+        if (str_starts_with($text, '/rm ')) {
+            $this->executeShellCommand("rm " . trim(substr($text, 4)));
             return;
         }
 
@@ -636,7 +735,13 @@ class FarControlDaemon
 
         // 2. Detecção Automática de Comandos Linux (Zero Tokens)
         if ($this->isNativeLinuxCommand($text)) {
-            $this->executeShellCommand($text);
+            $cleanCmd = trim($text);
+            if (str_starts_with($cleanCmd, '/')) {
+                $cleanCmd = substr($cleanCmd, 1);
+            } elseif (str_starts_with($cleanCmd, '$')) {
+                $cleanCmd = ltrim(substr($cleanCmd, 1));
+            }
+            $this->executeShellCommand($cleanCmd);
             return;
         }
 
@@ -992,30 +1097,48 @@ class FarControlDaemon
         }
 
         $output = '';
-        $lastProgressNotice = time();
-        $startTime = time();
+        $lineBuffer = '';
+        $lastActionTime = 0;
+        $sentStatusLines = [];
 
         while (true) {
             $status = proc_get_status($process);
 
+            // Mantém indicador "digitando..." ativo no Telegram
+            if (time() - $lastActionTime >= 4) {
+                $this->sendChatAction($this->allowedChatId, 'typing');
+                $lastActionTime = time();
+            }
+
             while (($chunk = fread($pipes[1], 8192)) !== false && $chunk !== '') {
                 $output .= $chunk;
+                $lineBuffer .= $chunk;
+
+                while (($newlinePos = strpos($lineBuffer, "\n")) !== false) {
+                    $rawLine = substr($lineBuffer, 0, $newlinePos);
+                    $lineBuffer = substr($lineBuffer, $newlinePos + 1);
+                    $cleanLine = trim($this->stripAnsi($rawLine));
+
+                    if ($cleanLine === '') {
+                        continue;
+                    }
+
+                    $isStatus = preg_match('/^(Analisando a task|Planejando|Começando a fazer|Finalizando|Terminei)/iu', $cleanLine)
+                             || preg_match('/^STATUS:\s*(APPROVED|REVISION_NEEDED)/i', $cleanLine)
+                             || preg_match('/^(\*|-)\s*\[[ x]\]\s*Minitask/i', $cleanLine);
+
+                    if ($isStatus && !isset($sentStatusLines[$cleanLine])) {
+                        $sentStatusLines[$cleanLine] = true;
+                        $this->sendTelegramMessage($this->allowedChatId, "⚡ {$cleanLine}");
+                    }
+                }
             }
 
             if (!$status['running']) {
                 break;
             }
 
-            if (time() - $lastProgressNotice >= 45) {
-                $elapsed = time() - $startTime;
-                $this->sendTelegramMessage(
-                    $this->allowedChatId,
-                    "⏳ [{$this->currentAgentKey}] Processando ({$elapsed}s decorridos)..."
-                );
-                $lastProgressNotice = time();
-            }
-
-            usleep(200000); // 200ms
+            usleep(150000); // 150ms
         }
 
         while (($chunk = fread($pipes[1], 8192)) !== false && $chunk !== '') {
@@ -1071,7 +1194,7 @@ class FarControlDaemon
         $messages = [
             [
                 'role' => 'system',
-                'content' => "Você é um assistente sênior de desenvolvimento. Siga estritamente o AI.md: seja ultra conciso, KISS, Clean Code, SOLID. Entregue diretamente a resposta ou código sem enrolação."
+                'content' => "Você é o assistente de engenharia do Sonar. Siga estritamente o AI.md: 1º Legibilidade, 2º Performance/Qualidade. Seja ultra conciso (estilo caveman), direto ao ponto, sem enrolação ou preâmbulos. Ao planejar tarefas, separe em minitasks."
             ],
             ['role' => 'user', 'content' => $prompt]
         ];
@@ -1151,16 +1274,113 @@ class FarControlDaemon
         ];
         $text = preg_replace($preambles, '', $text);
 
-        // 5. Normaliza quebras de linha múltiplas
-        $text = preg_replace("/\n{3,}/", "\n\n", $text);
+        // 5. Limpeza de Markdown, encurtamento de caminhos e espaçamento hierárquico
+        $text = $this->cleanMarkdownForTelegram($text);
 
         return $this->redactSensitiveData(trim($text));
+    }
+
+    /**
+     * Encurta caminhos de arquivos para no máximo 2 pastas antes do arquivo
+     * Exemplo: /home/user/proj/sub/src/index.js -> sub/src/index.js
+     */
+    private function shortenPaths(string $text): string
+    {
+        // 1. Remove sintaxe de link markdown [rotulo](file://...) -> rotulo
+        $text = preg_replace('/\[([^\]]+)\]\(file:\/\/\/[^\)]+\)/i', '$1', $text);
+        $text = preg_replace('/\(file:\/\/\/[^\)]+\)/i', '', $text);
+
+        // 2. Encurta caminhos absolutos para no máximo 2 pastas antes do arquivo
+        $text = preg_replace_callback(
+            '/(?:(?<=\s|^|[("\'`:])(\/(?:[a-zA-Z0-9_.\-]+\/)+[a-zA-Z0-9_.\-]+))/u',
+            function ($matches) {
+                $path = $matches[1];
+                if (str_starts_with($path, '/dev/') || str_starts_with($path, '/bin/') || str_starts_with($path, '/usr/')) {
+                    return $path;
+                }
+                $parts = explode('/', trim($path, '/'));
+                if (count($parts) <= 3) {
+                    return implode('/', $parts);
+                }
+                return implode('/', array_slice($parts, -3));
+            },
+            $text
+        );
+
+        return $text;
+    }
+
+    /**
+     * Limpa toda a poluição de Markdown para exibição limpa em texto puro no Telegram
+     */
+    private function cleanMarkdownForTelegram(string $text): string
+    {
+        // 1. Remove marcadores de status da resposta final (já transmitidos em tempo real)
+        $statusPatterns = [
+            '/^\s*(Analisando a task|Planejando|Começando a fazer[^\n]*|Finalizando[^\n]*|Terminei)\.?\s*$/ium',
+            '/^\s*STATUS:\s*(APPROVED|REVISION_NEEDED)\s*$/im',
+        ];
+        $text = preg_replace($statusPatterns, '', $text);
+
+        // 2. Remove sintaxe de links markdown [rotulo](url): preserva apenas o rótulo
+        $text = preg_replace('/\[([^\]]+)\]\([^\)]+\)/u', '$1', $text);
+
+        // 3. Remove blocos de código com cercas ```lang ... ``` -> preserva o conteúdo limpo
+        $text = preg_replace('/```[a-zA-Z0-9_\-]*\n?/u', '', $text);
+
+        // 4. Converte cabeçalhos markdown (# Título) para títulos limpos em caixa alta
+        $text = preg_replace_callback('/^(#{1,6})\s+(.+)$/m', function ($m) {
+            return mb_strtoupper(trim($m[2]), 'UTF-8') . ':';
+        }, $text);
+
+        // 5. Remove formatação de negrito (**texto** ou __texto__)
+        $text = preg_replace('/(\*\*|__)(.*?)\1/u', '$2', $text);
+
+        // 6. Remove crases de código inline (`código`)
+        $text = preg_replace('/`([^`]+)`/u', '$1', $text);
+
+        // 7. Normaliza marcadores de lista (* ou - para • limpo)
+        $text = preg_replace('/^\s*[\*\-]\s+/m', '• ', $text);
+
+        // 8. Remove blockquotes (>)
+        $text = preg_replace('/^\s*>\s?/m', '', $text);
+
+        // 9. Encurta caminhos de arquivos (máximo 2 pastas antes do arquivo)
+        $text = $this->shortenPaths($text);
+
+        // 10. Garante que seções fiquem separadas por 2 enters (\n\n) e sem linhas vazias excessivas
+        $lines = explode("\n", $text);
+        $cleanLines = [];
+        $lastEmpty = false;
+
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                if (!$lastEmpty && count($cleanLines) > 0) {
+                    $cleanLines[] = '';
+                    $lastEmpty = true;
+                }
+            } else {
+                $cleanLines[] = $trimmed;
+                $lastEmpty = false;
+            }
+        }
+
+        $result = implode("\n", $cleanLines);
+
+        // Seções ganham espaçamento duplo (\n\n)
+        $result = preg_replace('/([^\n])\n(•\s+)/u', "$1\n\n$2", $result);
+        $result = preg_replace('/([^\n])\n([A-Z0-9\s_]{3,}:)/u', "$1\n\n$2", $result);
+        $result = preg_replace("/\n{3,}/u", "\n\n", $result);
+
+        return trim($result);
     }
 
     private function isNativeLinuxCommand(string $text): bool
     {
         $parts = preg_split('/\s+/', trim($text));
         $firstWord = strtolower($parts[0] ?? '');
+        $cleanWord = ltrim($firstWord, '/$');
 
         $nativeCommands = [
             'ls', 'll', 'la', 'pwd', 'cat', 'head', 'tail', 'grep', 'find', 'tree',
@@ -1174,7 +1394,7 @@ class FarControlDaemon
             'uname', 'du', 'tar', 'zip', 'unzip', 'history', 'env',
         ];
 
-        return in_array($firstWord, $nativeCommands, true);
+        return in_array($cleanWord, $nativeCommands, true);
     }
 
     private function executeShellCommand(string $cmd): void
@@ -1235,22 +1455,22 @@ class FarControlDaemon
         }
         $exitCode = proc_close($process);
 
-        $cleanOutput = $this->redactSensitiveData($this->stripAnsi($output));
+        $cleanOutput = $this->cleanMarkdownForTelegram($this->redactSensitiveData($this->stripAnsi($output)));
 
-        $header = "💻 `\$ {$cmd}` (Zero Tokens)\n";
+        $header = "💻 $ {$cmd} (Zero Tokens)\n\n";
         if (trim($cleanOutput) === '') {
             $statusMsg = ($exitCode === 0)
-                ? "✅ Executado com sucesso (sem retorno de texto)."
+                ? "✅ Executado com sucesso."
                 : "⚠️ Executado com código de saída {$exitCode}.";
-            $this->sendTelegramMessage($this->allowedChatId, "{$header}{$statusMsg}");
+            $this->sendTelegramMessage($this->allowedChatId, "{$header}{$statusMsg}", null);
             return;
         }
 
-        $formatted = "{$header}```text\n{$cleanOutput}\n```";
+        $formatted = "{$header}{$cleanOutput}";
         if (mb_strlen($formatted, 'UTF-8') <= 3800) {
-            $this->sendTelegramMessage($this->allowedChatId, $formatted);
+            $this->sendTelegramMessage($this->allowedChatId, $formatted, null);
         } else {
-            $this->sendChunkedTelegramMessage($this->allowedChatId, $cleanOutput);
+            $this->sendChunkedTelegramMessage($this->allowedChatId, $formatted);
         }
     }
 
@@ -1378,7 +1598,8 @@ class FarControlDaemon
         $info = "🛰️ *SONAR: ARQUITETURA & GUIA DO SISTEMA*\n\n"
             . "1️⃣ *TERMINAL LINUX (Zero Tokens)*\n"
             . "• Comandos cotidianos rodam direto no Bash local sem gastar IA.\n"
-            . "• Detecção automática: `ls`, `git`, `mkdir`, `cat`, `npm`, `composer`, `docker`...\n"
+            . "• Detecção automática: `ls`, `cp`, `mv`, `git`, `mkdir`, `cat`, `rm`, `npm`, `composer`, `docker`...\n"
+            . "• Menu consolidado com todos os comandos Linux: 👉 `/linux`\n"
             . "• Comandos arbitrários com pipes: `/sh <comando>` ou `$ <comando>`.\n\n"
             . "2️⃣ *ORQUESTRADOR DE DIFICULDADE (NVIDIA Build / Fast LLM)*\n"
             . "• *Triagem Automática:* Avalia cada solicitação em linguagem natural.\n"
@@ -1409,6 +1630,64 @@ class FarControlDaemon
             . "• `/push [msg]` - Cria commit (se mensagem informada) e executa `git push` direto para o GitHub sem precisar abrir terminal.";
 
         $this->sendTelegramMessage($this->allowedChatId, $info);
+    }
+
+    /**
+     * Envia o menu consolidado com todos os comandos Linux nativos (/linux)
+     */
+    private function sendLinuxCommandsMenu(): void
+    {
+        $menu = "🐧 *SONAR: MENU DE COMANDOS LINUX (ZERO TOKENS)*\n"
+            . "_Comandos diretos no terminal Bash sem gastar tokens de IA. Digite com ou sem barra (`/`)._\n\n"
+            . "📁 *1. Arquivos & Diretórios:*\n"
+            . "• `cp <origem> <destino>` - Copiar arquivo\n"
+            . "  ↳ `cp -r <origem> <destino>` - Copiar pasta recursiva\n"
+            . "  ↳ `/cp` - Ver ajuda detalhada e exemplos\n"
+            . "• `mv <origem> <destino>` - Mover ou renomear\n"
+            . "  ↳ `mv arq.txt pasta/` - Mover para pasta\n"
+            . "  ↳ `/mv` - Ver ajuda detalhada e exemplos\n"
+            . "• `mkdir <pasta>` - Criar pasta simples\n"
+            . "  ↳ `mkdir -p a/b/c` - Criar pastas e subpastas aninhadas\n"
+            . "  ↳ `/mkdir` - Ver ajuda e exemplos\n"
+            . "• `rm <arquivo>` - Remover arquivo\n"
+            . "  ↳ `rm -rf <pasta>` - Remover pasta e conteúdo\n"
+            . "  ↳ `/rm` - Ver ajuda e exemplos\n"
+            . "• `touch <arquivo>` - Criar arquivo vazio ou atualizar timestamp\n"
+            . "• `chmod <permissao> <arq>` - Alterar permissões (ex: `chmod +x run.sh`)\n"
+            . "• `ln -s <alvo> <link>` - Criar link simbólico\n\n"
+            . "👁️ *2. Inspeção & Busca:*\n"
+            . "• `ls -la` (ou `ll`) - Listar arquivos com detalhes e ocultos\n"
+            . "• `cat <arquivo>` - Exibir todo o conteúdo do arquivo\n"
+            . "• `head -n 20 <arq>` - Primeiras 20 linhas\n"
+            . "• `tail -n 20 <arq>` - Últimas 20 linhas\n"
+            . "• `grep \"termo\" <arq>` - Buscar texto (`grep -rn \"termo\" .`)\n"
+            . "• `find . -name \"*.php\"` - Localizar arquivos por padrão\n"
+            . "• `tree -L 2` - Visualizar árvore de diretórios\n"
+            . "• `diff <arq1> <arq2>` - Comparar diferenças\n"
+            . "• `wc -l <arquivo>` - Contar linhas\n\n"
+            . "🌿 *3. Git Mobile & Versão:*\n"
+            . "• `git status` - Estado do repositório\n"
+            . "• `git diff` - Diferenças locais não commitadas\n"
+            . "• `git pull` / `git fetch` - Atualizar repositório local\n"
+            . "• `git log --oneline -n 10` - Últimos 10 commits\n"
+            . "• `/commit <msg>` - Atalho mobile: `git add -A` + commit\n"
+            . "• `/push [msg]` - Atalho mobile: commita e envia ao GitHub\n\n"
+            . "⚙️ *4. Processos & Monitoramento:*\n"
+            . "• `ps aux | grep <termo>` - Listar processos em execução\n"
+            . "• `kill <pid>` ou `pkill <nome>` - Finalizar processo\n"
+            . "• `df -h` - Espaço livre em disco\n"
+            . "• `free -h` - Memória RAM e Swap\n"
+            . "• `uptime` - Tempo de atividade da máquina\n"
+            . "• `whoami` / `uname -a` - Usuário e versão do Kernel\n\n"
+            . "🌐 *5. Rede & Pacotes:*\n"
+            . "• `curl -I <url>` / `wget <url>` - Testar URL ou baixar\n"
+            . "• `tar -czvf backup.tar.gz <pasta>` - Compactar\n"
+            . "• `unzip <arquivo.zip>` - Descompactar\n"
+            . "• `npm test` / `composer install` / `pip install -r req.txt`\n\n"
+            . "💡 *Pipes e Scripts Complexos:*\n"
+            . "Use `/sh <comando>` ou `$ <comando>` para pipes (`|`) e redirecionamentos.";
+
+        $this->sendTelegramMessage($this->allowedChatId, $menu);
     }
 
     private function sendRecentLogs(): void
@@ -1567,7 +1846,23 @@ class FarControlDaemon
         return $success !== false;
     }
 
-    public function sendTelegramMessage(int $chatId, string $text, ?string $parseMode = 'Markdown'): bool
+    public function sendChatAction(int $chatId, string $action = 'typing'): bool
+    {
+        $url = "https://api.telegram.org/bot{$this->botToken}/sendChatAction";
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => http_build_query(['chat_id' => $chatId, 'action' => $action]),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 5,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        $response = curl_exec($ch);
+        $json = json_decode((string)$response, true);
+        return isset($json['ok']) && $json['ok'] === true;
+    }
+
+    public function sendTelegramMessage(int $chatId, string $text, ?string $parseMode = null): bool
     {
         $url = "https://api.telegram.org/bot{$this->botToken}/sendMessage";
         $payload = [
@@ -1653,7 +1948,7 @@ class FarControlDaemon
 
     public function shutdown(): void
     {
-        $this->log("Desligando Far-Control Daemon...", "INFO");
+        $this->log("Desligando Sonar Daemon...", "INFO");
         $this->isRunning = false;
         exit(0);
     }
@@ -1672,5 +1967,5 @@ class FarControlDaemon
 // BOOTSTRAP DO DAEMON
 // ============================================================================
 
-$daemon = new FarControlDaemon();
+$daemon = new SonarDaemon();
 $daemon->run();
