@@ -43,7 +43,7 @@ class SonarBridge
     public function __construct()
     {
         $base = getenv('PROJECTS_BASE_DIR');
-        $this->projectsBaseDir = ($base && is_dir($base)) ? realpath($base) : realpath(__DIR__ . '/..') ?: __DIR__;
+        $this->projectsBaseDir = ($base && is_dir($base)) ? realpath($base) : (realpath(__DIR__ . '/..') ?: __DIR__);
         $this->secretToken = trim((string)getenv('SONAR_BRIDGE_TOKEN'));
     }
 
