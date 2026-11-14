@@ -152,7 +152,6 @@ Quando uma instrução em linguagem natural chega:
 * **Nível 1 (Simples / Dúvida Teórica):** A IA rápida da NVIDIA / Fast Router responde instantaneamente (1-2s), poupando tempo e tokens do agente pesado.
 * **Nível 2 (Complexo / Intrínseco ao Projeto):** O orquestrador detecta que a tarefa exige ler ou alterar a codebase e despacha para o **Agente Forte** (`agy` com Gemini ou `opencode`).
 * **🛡️ Fallback Automático de Sobrevivência (Zero Downtime):** Se o Gemini ou OpenCode esgotarem tokens (`429`, `RESOURCE_EXHAUSTED` ou cota), o sistema automaticamente comuta para o **NVIDIA Build NIM (`Llama 3.2 90B Vision`)** para responder. Você **nunca fica sem resposta**.
-* **Agente Dedicado:** Você também pode usar a NVIDIA diretamente com `/agent nvidia`.
 
 ### 3. 🎙️ Fallback em Cascata para Whisper STT
 * Normalização de áudio para MP3 16kHz mono via `ffmpeg`.
@@ -171,6 +170,8 @@ Quando uma instrução em linguagem natural chega:
 
 | Comando | Descrição |
 | :--- | :--- |
+| `/workflow <p1, p2> \| <ação>` | Executa em paralelo nos projetos alvo com feedback consolidado sob `(nome_do_projeto)` |
+| `/all <ação>` | Executa em paralelo em todos os repositórios autorizados da pasta base |
 | `/linux` | Menu consolidado com todos os comandos Linux suportados e exemplos |
 | `/cp [orig] [dest]` | Copia arquivos ou diretórios (exibe guia de uso se sem parâmetros) |
 | `/mv [orig] [dest]` | Move ou renomeia arquivos/diretórios (exibe guia se sem parâmetros) |
@@ -182,9 +183,9 @@ Quando uma instrução em linguagem natural chega:
 | `/push [msg]` | Envia ao GitHub (`git push`) ou commita e envia se mensagem fornecida |
 | `/info` | Exibe o guia completo da arquitetura, fluxos e segurança |
 | `/orchestrator on\|off` | Ativa ou desativa a triagem inteligente de dificuldade |
-| `/agent [nome]` | Alterna entre `agy`, `opencode` e `nvidia` |
+| `/agent [agy\|opencode]` | Alterna entre os dois agentes de projeto (`agy` e `opencode`) |
 | `/models` | Lista modelos recomendados para o agente ativo |
-| `/model <nome>` | Define o modelo de IA |
+| `/model <nome>` | Define o modelo de IA do agente ativo (persistência independente por agente) |
 | `/pwd` e `/cd <pasta>` | Navega pelos projetos (com proteção de Jail) |
 | `/projects` | Lista repositórios autorizados |
 | `/status` | Diagnóstico completo do sistema |

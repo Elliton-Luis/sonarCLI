@@ -75,6 +75,9 @@ class AgyDriver implements AgentDriverInterface
     public function getRecommendedModels(): array
     {
         return [
+            '🧠 Gemini 2.5 Pro'             => 'gemini-2.5-pro',
+            '⚡ Gemini 2.5 Flash'           => 'gemini-2.5-flash',
+            '⚡ Gemini 3.8 Flash'           => 'gemini-3.8-flash',
             '🔄 Padrão do Sistema (Gemini)' => 'default',
         ];
     }
@@ -121,34 +124,11 @@ class OpenCodeDriver implements AgentDriverInterface
         return [
             '⚡ Gemini 2.5 Flash'     => 'google/gemini-2.5-flash',
             '⚡ Gemini 3 Flash'       => 'google/gemini-3-flash-preview',
-            '🧠 GPT-6 Luna'           => 'openai/gpt-6-luna',
             '🧠 GPT-5.4'              => 'openai/gpt-5.4',
+            '🧠 GPT-6 Luna'           => 'openai/gpt-6-luna',
             '🆓 DeepSeek Flash Free'   => 'opencode/deepseek-v4.1-flash-free',
             '🆓 Crouton Alpha Free'    => 'opencode/crouton-alpha-free',
             '🔄 Padrão do OpenCode'   => 'default',
-        ];
-    }
-}
-
-class NvidiaDriver implements AgentDriverInterface
-{
-    public function getName(): string
-    {
-        return "NVIDIA Build NIM (Llama 3.2 90B Vision)";
-    }
-
-    public function buildCommand(string $prompt, bool $continue, ?string $model): string
-    {
-        // Executado diretamente via API no SonarDaemon
-        return "NVIDIA_DIRECT_CALL";
-    }
-
-    public function getRecommendedModels(): array
-    {
-        return [
-            '🧠 Llama 3.2 90B Vision' => 'meta/llama-3.2-90b-vision-instruct',
-            '⚡ DeepSeek Flash'       => 'deepseek-ai/deepseek-v4.1-flash',
-            '🔄 Padrão NVIDIA'        => 'default',
         ];
     }
 }
@@ -169,7 +149,13 @@ class SonarDaemon
     private bool $orchestratorEnabled;
     private string $orchestratorModel;
     private string $currentAgentKey;
-    private ?string $currentModel;
+
+    /** @var array<string, ?string> */
+    private array $agentModels = [
+        'agy'      => null,
+        'opencode' => null,
+    ];
+
     private string $currentWorkingDir;
     private string $projectsBaseDir;
     private string $storageDir;
@@ -200,7 +186,7 @@ class SonarDaemon
         $this->orchestratorModel     = (string)(getenv('ORCHESTRATOR_MODEL') ?: 'deepseek/deepseek-v4.1-flash');
 
         $defaultAgent                = (string)(getenv('DEFAULT_AGENT') ?: (getenv('STRONG_AGENT') ?: 'agy'));
-        $this->currentModel          = getenv('DEFAULT_MODEL') !== false && getenv('DEFAULT_MODEL') !== '' ? trim((string)getenv('DEFAULT_MODEL')) : null;
+        $defaultModel                = getenv('DEFAULT_MODEL') !== false && getenv('DEFAULT_MODEL') !== '' ? trim((string)getenv('DEFAULT_MODEL')) : null;
 
         $configuredDir               = (string)getenv('DEFAULT_WORKSPACE_DIR');
         $resolvedDir                 = !empty($configuredDir) && is_dir($configuredDir) ? realpath($configuredDir) : getcwd();
@@ -220,8 +206,11 @@ class SonarDaemon
 
         $this->drivers['agy']      = new AgyDriver();
         $this->drivers['opencode'] = new OpenCodeDriver();
-        $this->drivers['nvidia']   = new NvidiaDriver();
         $this->currentAgentKey     = isset($this->drivers[$defaultAgent]) ? $defaultAgent : 'agy';
+
+        if ($defaultModel !== null) {
+            $this->agentModels[$this->currentAgentKey] = $defaultModel;
+        }
 
         $this->isSessionUnlocked     = ($this->sessionPin === null);
         $this->lastActivityTimestamp = microtime(true);
@@ -442,10 +431,12 @@ class SonarDaemon
                 . "  `/orchestrator on` - Ativa triagem inteligente.\n"
                 . "  `/orchestrator off` - Desativa (tudo vai para o agente forte).\n\n"
                 . "• *Agente & Modelo de Projeto:*\n"
-                . "  `/agent` - Alterna entre `agy`, `opencode` ou `nvidia`.\n"
-                . "  `/agent nvidia` - Usa NVIDIA Build NIM (Llama 3.2 90B).\n"
+                . "  `/agent` - Alterna entre `agy` ou `opencode`.\n"
                 . "  `/models` - Lista modelos recomendados para o agente ativo.\n"
-                . "  `/model <nome>` - Define o modelo de IA.\n\n"
+                . "  `/model <nome>` - Define o modelo de IA do agente atual.\n\n"
+                . "• *Workflows Multi-Projetos (Paralelo):*\n"
+                . "  `/workflow <proj1, proj2...> | <ação>` - Executa em paralelo nos projetos listados.\n"
+                . "  `/all <ação>` - Executa em paralelo em todos os projetos da base.\n\n"
                 . "• *Workspace & Pastas (Jail Seguro):*\n"
                 . "  `/pwd` - Exibe pasta atual de trabalho.\n"
                 . "  `/projects` - Lista repositórios autorizados.\n"
@@ -494,29 +485,30 @@ class SonarDaemon
             $target = strtolower($parts[1] ?? '');
 
             if ($target === '') {
-                $available = implode(", ", array_map(fn($k) => "`{$k}`", array_keys($this->drivers)));
-                $msg = "🤖 *Agente Ativo:* `{$this->currentAgentKey}` (" . $this->getActiveDriver()->getName() . ")\n"
-                    . "Disponíveis: {$available}\n\n"
-                    . "Para alternar:\n"
-                    . "👉 `/agent agy`\n"
-                    . "👉 `/agent opencode`";
-                $this->sendTelegramMessage($this->allowedChatId, $msg);
+                $lines = ["🤖 *Seleção de Agente:*\n"];
+                foreach ($this->drivers as $key => $driver) {
+                    $activeMark = ($this->currentAgentKey === $key) ? " 👈 (ativo)" : "";
+                    $curMod = $this->agentModels[$key] ?? 'Padrão do agente';
+                    $lines[] = "• `{$key}`: *{$driver->getName()}*{$activeMark}\n  Modelo: `{$curMod}`\n  👉 `/agent {$key}`\n";
+                }
+                $lines[] = "Use `/models` para listar modelos sugeridos ou `/model <nome>` para trocar.";
+                $this->sendTelegramMessage($this->allowedChatId, implode("\n", $lines));
                 return;
             }
 
             if (!isset($this->drivers[$target])) {
-                $this->sendTelegramMessage($this->allowedChatId, "❌ Agente desconhecido: `{$target}`. Opções: `agy`, `opencode`.");
+                $this->sendTelegramMessage($this->allowedChatId, "❌ Agente desconhecido: `{$target}`. Agentes suportados: `agy`, `opencode`.");
                 return;
             }
 
             $this->currentAgentKey = $target;
-            $this->currentModel = null;
             $this->isFirstTurnInDir = true;
+            $currentMod = $this->agentModels[$target] ?? 'Padrão do agente';
 
             $this->log("Agente alterado para: {$this->currentAgentKey}", "INFO");
             $this->sendTelegramMessage(
                 $this->allowedChatId,
-                "✅ *Agente Ativo:* `{$this->currentAgentKey}` (" . $this->getActiveDriver()->getName() . ")\nModelo: _Padrão do agente_"
+                "✅ *Agente Ativo:* `{$this->currentAgentKey}` (" . $this->getActiveDriver()->getName() . ")\nModelo configurado: `{$currentMod}`"
             );
             return;
         }
@@ -524,10 +516,11 @@ class SonarDaemon
         if ($text === '/models') {
             $driver = $this->getActiveDriver();
             $recommended = $driver->getRecommendedModels();
+            $currentModelForAgent = $this->agentModels[$this->currentAgentKey] ?? null;
 
             $lines = ["🧠 *Modelos sugeridos para* `{$this->currentAgentKey}`:\n"];
             foreach ($recommended as $label => $modelCode) {
-                $isCurrent = ($this->currentModel === $modelCode || (empty($this->currentModel) && $modelCode === 'default')) ? ' 👈 (atual)' : '';
+                $isCurrent = ($currentModelForAgent === $modelCode || (empty($currentModelForAgent) && $modelCode === 'default')) ? ' 👈 (atual)' : '';
                 $lines[] = "• *{$label}*{$isCurrent}\n  👉 `/model {$modelCode}`";
             }
             $lines[] = "\n_Você também pode digitar `/model <provedor/modelo>` livremente._";
@@ -541,23 +534,23 @@ class SonarDaemon
             $targetModel = trim($parts[1] ?? '');
 
             if ($targetModel === '') {
-                $cur = $this->currentModel ?: '_Padrão do agente_';
+                $cur = $this->agentModels[$this->currentAgentKey] ?? '_Padrão do agente_';
                 $this->sendTelegramMessage(
                     $this->allowedChatId,
-                    "🧠 *Modelo Atual:* `{$cur}`\n\nUse `/models` para sugestões ou `/model <nome>` para definir."
+                    "🧠 *Modelo Atual ({$this->currentAgentKey}):* `{$cur}`\n\nUse `/models` para sugestões ou `/model <nome>` para definir."
                 );
                 return;
             }
 
             if ($targetModel === 'default' || $targetModel === 'reset') {
-                $this->currentModel = null;
+                $this->agentModels[$this->currentAgentKey] = null;
                 $this->sendTelegramMessage($this->allowedChatId, "✅ Modelo resetado para o padrão do `{$this->currentAgentKey}`.");
                 return;
             }
 
-            $this->currentModel = $targetModel;
-            $this->log("Modelo configurado para: {$this->currentModel} no agente {$this->currentAgentKey}", "INFO");
-            $this->sendTelegramMessage($this->allowedChatId, "✅ *Modelo Configurado:*\n`{$this->currentModel}`");
+            $this->agentModels[$this->currentAgentKey] = $targetModel;
+            $this->log("Modelo configurado para: {$targetModel} no agente {$this->currentAgentKey}", "INFO");
+            $this->sendTelegramMessage($this->allowedChatId, "✅ *Modelo Configurado ({$this->currentAgentKey}):*\n`{$targetModel}`");
             return;
         }
 
@@ -614,7 +607,7 @@ class SonarDaemon
         }
 
         if ($text === '/status') {
-            $curMod = $this->currentModel ?: 'Padrão do agente';
+            $curMod = $this->agentModels[$this->currentAgentKey] ?? 'Padrão do agente';
             $pinStat = $this->sessionPin ? '🟢 Autenticado (PIN Ativo)' : '⚪ Sem PIN';
             $orchStat = $this->orchestratorEnabled ? "🟢 Ativo (`{$this->orchestratorModel}`)" : "⚪ Desativado";
             $msg = "📊 *Status do Sonar:*\n\n"
@@ -625,6 +618,27 @@ class SonarDaemon
                 . "• *Segurança:* {$pinStat}\n"
                 . "• *Status:* 🟢 Pronto para comandos";
             $this->sendTelegramMessage($this->allowedChatId, $msg);
+            return;
+        }
+
+        // Multi-Project Workflows (/workflow <projs> | <ação>)
+        if (str_starts_with($text, '/workflow')) {
+            $raw = trim(substr($text, 9));
+            $this->handleWorkflowCommand($raw);
+            return;
+        }
+
+        // Executar em todos os projetos (/all <ação>)
+        if (str_starts_with($text, '/all ') || $text === '/all') {
+            $raw = trim(substr($text, 4));
+            if ($raw === '') {
+                $this->sendTelegramMessage(
+                    $this->allowedChatId,
+                    "⚠️ Uso do `/all`:\n`/all <comando ou prompt>`\n\nExemplos:\n`/all git status`\n`/all git pull`\n`/all verificar dependencias`"
+                );
+                return;
+            }
+            $this->handleWorkflowCommand("* | " . $raw);
             return;
         }
 
@@ -1050,25 +1064,9 @@ class SonarDaemon
 
     private function executePromptOnAgent(string $prompt): void
     {
-        // Se o usuário selecionou o agente NVIDIA diretamente (/agent nvidia)
-        if ($this->currentAgentKey === 'nvidia') {
-            $this->sendTelegramMessage(
-                $this->allowedChatId,
-                "⏳ [NVIDIA Build] Consultando Llama 3.2 90B..."
-            );
-            $ans = $this->callNvidiaBuildDirect($prompt, $this->currentModel);
-            if ($ans) {
-                $clean = $this->sanitizeAgentOutput($ans);
-                $this->sendChunkedTelegramMessage($this->allowedChatId, $clean);
-                return;
-            }
-            $this->sendTelegramMessage($this->allowedChatId, "❌ Falha ao obter resposta da NVIDIA Build.");
-            return;
-        }
-
         $driver = $this->getActiveDriver();
         $isContinue = !$this->isFirstTurnInDir;
-        $command = $driver->buildCommand($prompt, $isContinue, $this->currentModel);
+        $command = $driver->buildCommand($prompt, $isContinue, $this->agentModels[$this->currentAgentKey] ?? null);
 
         $this->sendTelegramMessage(
             $this->allowedChatId,
@@ -1590,6 +1588,229 @@ class SonarDaemon
         $this->sendTelegramMessage($this->allowedChatId, $msg);
     }
 
+    private function handleWorkflowCommand(string $raw): void
+    {
+        if (!str_contains($raw, '|')) {
+            $this->sendTelegramMessage(
+                $this->allowedChatId,
+                "⚠️ *Uso de Workflows Multi-Projetos:*\n\n"
+                . "• *Projetos específicos:*\n"
+                . "  `/workflow <proj1, proj2...> | <ação>`\n"
+                . "  Exemplo: `/workflow sonar, far-control | git status`\n"
+                . "  Exemplo: `/workflow sonar, far-control | verificar testes`\n\n"
+                . "• *Todos os projetos:*\n"
+                . "  `/all <ação>`\n"
+                . "  Exemplo: `/all git status`"
+            );
+            return;
+        }
+
+        [$targetStr, $action] = explode('|', $raw, 2);
+        $targetStr = trim($targetStr);
+        $action = trim($action);
+
+        if ($action === '') {
+            $this->sendTelegramMessage($this->allowedChatId, "⚠️ Nenhuma ação informada após o delimitador `|`.");
+            return;
+        }
+
+        $realBase = realpath($this->projectsBaseDir);
+        if (!$realBase || !is_dir($realBase)) {
+            $this->sendTelegramMessage($this->allowedChatId, "❌ Pasta base de projetos não encontrada: `{$this->projectsBaseDir}`");
+            return;
+        }
+
+        $targets = [];
+        if ($targetStr === '*' || strtolower($targetStr) === 'all') {
+            $items = scandir($realBase);
+            foreach ($items as $item) {
+                if ($item === '.' || $item === '..' || str_starts_with($item, '.')) {
+                    continue;
+                }
+                $full = $realBase . '/' . $item;
+                if (is_dir($full)) {
+                    $targets[] = ['name' => $item, 'path' => $full];
+                }
+            }
+        } else {
+            $names = array_values(array_unique(preg_split('/[\s,]+/', $targetStr, -1, PREG_SPLIT_NO_EMPTY)));
+            foreach ($names as $name) {
+                $full = realpath($realBase . '/' . $name);
+                if (!$full || !is_dir($full) || (!str_starts_with($full, $realBase . '/') && $full !== $realBase)) {
+                    $this->sendTelegramMessage($this->allowedChatId, "❌ Projeto não encontrado ou fora da base autorizada: `{$name}`");
+                    return;
+                }
+                $targets[] = ['name' => basename($full), 'path' => $full];
+            }
+        }
+
+        if (empty($targets)) {
+            $this->sendTelegramMessage($this->allowedChatId, "⚠️ Nenhum diretório de projeto válido selecionado.");
+            return;
+        }
+
+        $this->executeParallelWorkflow($targets, $action);
+    }
+
+    /**
+     * Executa comandos ou prompts em paralelo em múltiplos diretórios de projetos
+     * @param array<int, array{name: string, path: string}> $targets
+     */
+    private function executeParallelWorkflow(array $targets, string $action): void
+    {
+        $count = count($targets);
+        $projNames = implode(', ', array_map(fn($t) => "`{$t['name']}`", $targets));
+
+        $isShell = false;
+        $cmdToRun = '';
+
+        if (str_starts_with($action, '/sh ') || str_starts_with($action, '/run ') || str_starts_with($action, '$ ')) {
+            $isShell = true;
+            $cmdToRun = trim(substr($action, strpos($action, ' ') + 1));
+        } elseif ($this->isNativeLinuxCommand($action)) {
+            $isShell = true;
+            $clean = trim($action);
+            if (str_starts_with($clean, '/')) {
+                $clean = substr($clean, 1);
+            } elseif (str_starts_with($clean, '$')) {
+                $clean = ltrim(substr($clean, 1));
+            }
+            $cmdToRun = $clean;
+        } else {
+            $isShell = false;
+            $driver = $this->getActiveDriver();
+            $cmdToRun = $driver->buildCommand($action, false, $this->agentModels[$this->currentAgentKey] ?? null);
+        }
+
+        $typeDesc = $isShell ? "Bash Shell" : "Agente {$this->currentAgentKey}";
+        $this->sendTelegramMessage(
+            $this->allowedChatId,
+            "⚡ *Workflow Paralelo Iniciado* ({$typeDesc}) em {$count} projetos:\n{$projNames}"
+        );
+
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $activeProcs = [];
+        foreach ($targets as $target) {
+            $execString = $isShell ? "exec bash -c " . escapeshellarg($cmdToRun) . " 2>&1" : $cmdToRun;
+            $pipes = [];
+            $proc = @proc_open($execString, $descriptors, $pipes, $target['path']);
+
+            if (is_resource($proc)) {
+                fclose($pipes[0]);
+                stream_set_blocking($pipes[1], false);
+                if (isset($pipes[2]) && is_resource($pipes[2])) {
+                    stream_set_blocking($pipes[2], false);
+                }
+                $activeProcs[$target['name']] = [
+                    'proc'   => $proc,
+                    'pipes'  => $pipes,
+                    'output' => '',
+                    'path'   => $target['path'],
+                ];
+            } else {
+                $activeProcs[$target['name']] = [
+                    'proc'   => null,
+                    'pipes'  => [],
+                    'output' => "❌ Falha ao iniciar processo em {$target['path']}",
+                    'path'   => $target['path'],
+                ];
+            }
+        }
+
+        $startTime = microtime(true);
+        $lastTyping = 0;
+        $timeoutSeconds = $isShell ? 60.0 : 300.0;
+
+        while (!empty($activeProcs)) {
+            if (time() - $lastTyping >= 4) {
+                $this->sendChatAction($this->allowedChatId, 'typing');
+                $lastTyping = time();
+            }
+
+            $allFinished = true;
+            foreach ($activeProcs as $name => &$item) {
+                if ($item['proc'] === null) {
+                    continue;
+                }
+
+                while (($chunk = fread($item['pipes'][1], 8192)) !== false && $chunk !== '') {
+                    $item['output'] .= $chunk;
+                }
+
+                if (isset($item['pipes'][2]) && is_resource($item['pipes'][2])) {
+                    while (($chunkErr = fread($item['pipes'][2], 8192)) !== false && $chunkErr !== '') {
+                        $item['output'] .= $chunkErr;
+                    }
+                }
+
+                $status = proc_get_status($item['proc']);
+                if (!$status['running']) {
+                    while (($chunk = fread($item['pipes'][1], 8192)) !== false && $chunk !== '') {
+                        $item['output'] .= $chunk;
+                    }
+                    if (isset($item['pipes'][2]) && is_resource($item['pipes'][2])) {
+                        while (($chunkErr = fread($item['pipes'][2], 8192)) !== false && $chunkErr !== '') {
+                            $item['output'] .= $chunkErr;
+                        }
+                        fclose($item['pipes'][2]);
+                    }
+                    fclose($item['pipes'][1]);
+                    proc_close($item['proc']);
+                    $item['proc'] = null;
+                } else {
+                    $allFinished = false;
+                }
+            }
+            unset($item);
+
+            if ($allFinished) {
+                break;
+            }
+
+            if ((microtime(true) - $startTime) > $timeoutSeconds) {
+                foreach ($activeProcs as $name => &$item) {
+                    if ($item['proc'] !== null) {
+                        $item['output'] .= "\n⚠️ Timeout de execução atingido ({$timeoutSeconds}s).";
+                        proc_terminate($item['proc'], 9);
+                        if (isset($item['pipes'][1]) && is_resource($item['pipes'][1])) {
+                            fclose($item['pipes'][1]);
+                        }
+                        if (isset($item['pipes'][2]) && is_resource($item['pipes'][2])) {
+                            fclose($item['pipes'][2]);
+                        }
+                        proc_close($item['proc']);
+                        $item['proc'] = null;
+                    }
+                }
+                unset($item);
+                break;
+            }
+
+            usleep(100000); // 100ms
+        }
+
+        // Formatação estrita com cabeçalho (nome_do_projeto) e 2 enters (\n\n)
+        $sections = [];
+        foreach ($activeProcs as $name => $item) {
+            $rawClean = $isShell
+                ? $this->cleanMarkdownForTelegram($this->redactSensitiveData($this->stripAnsi($item['output'])))
+                : $this->sanitizeAgentOutput($item['output']);
+            $cleanOut = trim($rawClean);
+            if ($cleanOut === '') {
+                $cleanOut = '(sem saída / concluído)';
+            }
+            $sections[] = "({$name})\n" . $cleanOut;
+        }
+
+        $finalResponse = implode("\n\n", $sections);
+        $this->sendChunkedTelegramMessage($this->allowedChatId, $finalResponse);
+    }
+
     /**
      * Envia visão geral da arquitetura, fluxos e segurança (/info)
      */
@@ -1609,11 +1830,14 @@ class SonarDaemon
             . "3️⃣ *AGENTES & ALTA DISPONIBILIDADE*\n"
             . "• `/agent agy` - Antigravity CLI (Gemini, raciocínio profundo e automação).\n"
             . "• `/agent opencode` - OpenCode CLI (respostas ultrarrápidas).\n"
-            . "• `/agent nvidia` - NVIDIA Build NIM (Llama 3.2 90B Vision direto).\n"
             . "• *Sobrevivência Automática:* Se o Gemini ou OpenCode esgotarem tokens (429/cota), o sistema comuta instantaneamente para o NVIDIA Build. Você nunca fica sem resposta!\n"
-            . "• `/models` - Atalhos de modelos recomendados.\n"
-            . "• `/model <nome>` - Troca dinâmica de modelo.\n\n"
-            . "4️⃣ *ÁUDIO COM FALLBACK WHISPER (STT)*\n"
+            . "• `/models` - Atalhos de modelos recomendados para o agente ativo.\n"
+            . "• `/model <nome>` - Troca dinâmica de modelo persistida por agente.\n\n"
+            . "4️⃣ *WORKFLOWS MULTI-PROJETOS (Execução Concorrente)*\n"
+            . "• `/workflow <p1, p2> | <ação>` - Dispara processos paralelos em múltiplos projetos.\n"
+            . "• `/all <ação>` - Executa simultaneamente em todos os projetos da base.\n"
+            . "• Respostas isoladas e consolidadas sob o identificador `(nome_do_projeto)`.\n\n"
+            . "5️⃣ *ÁUDIO COM FALLBACK WHISPER (STT)*\n"
             . "• Normalização com FFmpeg (16kHz mono MP3).\n"
             . "• *Cascata:* 1º Groq Turbo ➔ 2º Groq v3 ➔ 3º OpenRouter Whisper.\n\n"
             . "5️⃣ *SEGURANÇA DEFENSIVA (Hardening)*\n"
