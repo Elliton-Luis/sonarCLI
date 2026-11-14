@@ -8,6 +8,7 @@ Este arquivo é a raiz de governança. As diretrizes especializadas são carrega
 * **Formatação Mobile:** Sem links markdown `[label](file://...)`. Mostre caminhos com no máximo 2 pastas antes do arquivo (ex: `src/index.js`). Separe seções com 2 enters (`\n\n`).
 * **Transparência:** Emita os marcos de status em tempo real (`Analisando a task`, `Planejando`, `Começando a fazer X`, `Finalizando Y`, `Terminei`).
 * **Minitasks:** Para qualquer solicitação complexa, gere minitasks para aprovação prévia do usuário antes de executar.
+* **Flags Mandatórias de CLI:** O `agy` SEMPRE deve ser executado com `--dangerously-skip-permissions` e o `opencode` SEMPRE com `--auto`.
 
 ## 2. Roteamento Condicional (Progressive Disclosure)
 * **SE a tarefa envolver busca/localização na codebase:**

@@ -2,6 +2,10 @@
 
 > **Diretrizes de engenharia e roteamento condicional para agentes no Sonar.**
 
+4. **Execução Autônoma de Agentes (Zero Bloqueio Interativo):**
+   - O `agy` (Antigravity CLI) **SEMPRE** deve ser chamado com a flag `--dangerously-skip-permissions` para não travar aguardando confirmação de terminal.
+   - O `opencode` (OpenCode CLI) **SEMPRE** deve ser chamado com a flag `--auto` para execução autônoma ininterrupta.
+
 ---
 
 ## 🏛️ 1. Hierarquia de Decisão (Progressive Disclosure)
